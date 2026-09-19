@@ -1,0 +1,6 @@
+pymongo>=4.6.0
+google-generativeai>=0.7.0
+pdfplumber>=0.11.0
+fake-useragent>=1.5.0
+python-dotenv>=1.0.0
+requests>=2.31.0
