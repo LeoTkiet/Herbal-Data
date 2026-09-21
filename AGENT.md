@@ -13,13 +13,15 @@
 Hệ thống sử dụng kiến trúc module hóa (**Modular Architecture**) với các công nghệ lõi:
 
 - **Ngôn ngữ:** Python 3.10+
+- **Tìm kiếm & Tự động dò tìm (Automated Discovery):**
+  - `ddgs`: Tự động tìm kiếm link PDF theo từ khóa y học với cú pháp `filetype:pdf`.
 - **Thư viện Web Scraping & Anti-bot:**
   - `requests`: Tải file PDF theo luồng stream.
   - `fake-useragent`: Giả lập đa dạng User-Agent của trình duyệt hiện đại.
 - **Xử lý PDF:**
   - `pdfplumber`: Phân tích và trích xuất nội dung văn bản chất lượng cao từ tài liệu nghiên cứu y khoa.
 - **Trí tuệ nhân tạo (AI Engine):**
-  - `google-generativeai`: Sử dụng model `gemini-1.5-flash` kết hợp System Prompt ép cấu trúc JSON chuẩn.
+  - `google-generativeai`: Sử dụng model `gemini-2.5-flash` kết hợp System Prompt ép cấu trúc JSON chuẩn.
 - **Cơ sở dữ liệu (Database):**
   - `pymongo`: Kết nối và thao tác với MongoDB (Local hoặc Cloud Atlas).
 - **Cấu hình:**
@@ -33,6 +35,7 @@ Herbal-Data/
 ├── main_scraper.py       # File thực thi chính (CLI & Orchestration)
 ├── src/                  # Các module chức năng tách biệt
 │   ├── __init__.py
+│   ├── spider.py         # Automated Discovery Spider (DuckDuckGo Search)
 │   ├── ai_manager.py     # Gemini Key Pool, bắt lỗi 429 & luân chuyển Key
 │   ├── db_manager.py     # MongoDB Lazy Creation, Idempotency & Indexing
 │   ├── pdf_processor.py  # Tải và trích xuất text từ tài liệu PDF
@@ -75,31 +78,34 @@ Agent vận hành với cơ chế **MongoDB Lazy Creation** hoàn toàn tự đ�
 ---
 
 ## 🔄 5. Data Pipeline (Luồng Xử lý Dữ liệu)
-Quy trình xử lý tuần tự cho mỗi tài liệu nghiên cứu y khoa:
+Quy trình xử lý hoàn chỉnh gồm 2 giai đoạn: **Automated Discovery** và **Core Extraction Pipeline**:
 
 ```
-[1. URL Đầu vào]
-       │
-       ▼
-[2. Check Log (Idempotency)] ──(Đã cào thành công)──► [Bỏ qua - Tiết kiệm tài nguyên]
-       │ (Chưa cào hoặc từng failed)
-       ▼
-[3. Anti-Bot Delay (3-7s)]
-       │
-       ▼
-[4. Ingestion: Tải PDF tạm thời]
-       │
-       ▼
-[5. Processing: Trích xuất Text qua pdfplumber]
-       │
-       ▼
-[6. Extraction: Gemini 1.5 Flash (Key Pool Rotation)] ──(Lỗi 429)──► [Đổi Key & Thử lại]
-       │
-       ▼
-[7. Storage & Logging: Lưu vào herbs_raw & ghi crawled_logs]
-       │
-       ▼
-[8. Cleanup (finally): Xóa file PDF tạm - Zero Disk Footprint]
+[Danh sách Từ khóa Thảo dược]
+              │
+              ▼
+┌───────────────────────────────────────────────┐
+│ GIAI ĐOẠN 1: AUTOMATED DISCOVERY (SPIDER)     │
+│ 1. Ghép cú pháp "filetype:pdf" vào từ khóa    │
+│ 2. DuckDuckGo Search (DDGS)                   │
+│ 3. Lọc link .pdf & Khử trùng lặp (Set)        │
+│ 4. Rate-limit delay (2 - 5s giữa các từ khóa) │
+└───────────────────────┬───────────────────────┘
+                        │ Danh sách Unique PDF URLs
+                        ▼
+┌───────────────────────────────────────────────┐
+│ GIAI ĐOẠN 2: CORE EXTRACTION PIPELINE         │
+│ 5. Check Log (Idempotency trên MongoDB)       │
+│    ├── (Đã cào thành công) ──► Bỏ qua         │
+│    └── (Chưa cào / failed) ──► Đi tiếp        │
+│ 6. Anti-Bot Delay (3 - 7s)                    │
+│ 7. Ingestion: Tải file PDF tạm (tempfile)     │
+│ 8. Processing: Đọc text bằng pdfplumber       │
+│ 9. AI Extraction: Gemini 1.5 Flash (Key Pool) │
+│    └── (Bắt lỗi 429) ──► Luân chuyển Key      │
+│ 10. Storage & Log: Lưu herbs_raw & log status │
+│ 11. Cleanup (finally): Xóa PDF tạm            │
+└───────────────────────────────────────────────┘
 ```
 
 ---
@@ -179,25 +185,30 @@ GEMINI_KEYS=AIzaSyA_KEY_MOT,AIzaSyB_KEY_HAI,AIzaSyC_KEY_BA
 ### Bước 3: Khởi chạy Hệ thống
 Hệ thống cung cấp các phương thức chạy linh hoạt:
 
-1. **Chạy với danh sách URL cụ thể qua dòng lệnh:**
+1. **Chế độ Automated Discovery (Mặc định - Tự động tìm kiếm theo từ khóa mẫu):**
+   ```bash
+   python main_scraper.py
+   ```
+
+2. **Tìm kiếm tự động với danh sách từ khóa thảo dược tùy chọn:**
+   ```bash
+   python main_scraper.py --keywords "nghiên cứu sâm ngọc linh" "tác dụng xạ đen" --max-results 5
+   ```
+
+3. **Chạy với danh sách URL cụ thể qua dòng lệnh (bỏ qua Spider):**
    ```bash
    python main_scraper.py --urls https://example.com/paper1.pdf https://example.com/paper2.pdf
    ```
 
-2. **Chạy danh sách URL từ file text (mỗi dòng 1 URL):**
+4. **Chạy danh sách URL từ file text (mỗi dòng 1 URL):**
    ```bash
    python main_scraper.py --file list_papers.txt
-   ```
-
-3. **Chạy mặc định (Demo mẫu):**
-   ```bash
-   python main_scraper.py
    ```
 
 ---
 
 ## 📈 8. Tiến trình Dự án (Project Progress)
-- **Trạng thái hiện tại:** **Hoàn tất setup Base Architecture, Database Configuration, và API Rotation. Đã sẵn sàng chạy thử nghiệm thực tế.**
+- **Trạng thái hiện tại:** **Hoàn tất tích hợp Automated Discovery Spider (DuckDuckGo Search) tự động dò tìm tài liệu nghiên cứu PDF theo từ khóa thảo dược.**
 - **Hạng mục đã hoàn thành:**
   - [x] Thiết lập cấu trúc module dự án chuẩn Clean Code (`src/`).
   - [x] Cơ chế quản lý mảng Gemini API Keys và bắt lỗi 429 ResourceExhausted để tự động xoay vòng Key.
@@ -205,3 +216,4 @@ Hệ thống cung cấp các phương thức chạy linh hoạt:
   - [x] Module xử lý PDF và Anti-Bot bypass với User-Agent ngẫu nhiên cùng khoảng nghỉ 3-7s.
   - [x] Cam kết Zero Disk Footprint qua khối lệnh `finally`.
   - [x] Giao diện CLI và bộ điều phối pipeline trong `main_scraper.py`.
+  - [x] **Module Automated Discovery Spider (`src/spider.py`):** Tự động tìm kiếm link PDF theo từ khóa thảo dược qua DuckDuckGo Search, chống rate limit và lọc link duy nhất bằng `Set`.

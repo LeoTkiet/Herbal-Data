@@ -60,7 +60,7 @@ class HerbalScrapingPipeline:
             raw_text = self.pdf_processor.extract_text(temp_pdf_path)
 
             # 4. [Bóc tách] Đưa text qua Gemini để phân tích JSON
-            logger.info("🤖 [AI Extraction] Đang gửi nội dung tới Gemini 1.5 Flash...")
+            logger.info(f"🤖 [AI Extraction] Đang gửi nội dung tới Gemini ({self.ai_pool.model_name})...")
             extracted_json = self.ai_pool.extract_herb_data(raw_text)
 
             # 5. [Lưu DB & Log] Lưu vào herbs_raw và đánh dấu success trong crawled_logs

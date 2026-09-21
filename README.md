@@ -12,6 +12,7 @@
 
 ## 📌 Tính Năng Nổi Bật
 
+- 🕸️ **Automated Discovery (PDFSpider):** Tự động tìm kiếm link PDF bài báo y học trên DuckDuckGo Search API bằng cú pháp `filetype:pdf`. Hỗ trợ khử trùng lặp (Set) và cơ chế chống rate-limit thông minh.
 - 🤖 **Gemini API Key Pool & Auto Rotation:** Quản lý mảng nhiều Gemini API Keys. Tự động bắt mã lỗi `429 (ResourceExhausted)` để chuyển sang key kế tiếp và retry mà không làm sập ứng dụng.
 - 🗄️ **MongoDB Lazy Creation:** Tự động kết nối, khởi tạo database `herbal_db`, thiết lập 2 collections `herbs_raw` và `crawled_logs`, đồng thời kích hoạt Unique Index trên `crawled_logs.url` hoàn toàn tự động ở runtime.
 - 🧹 **Zero Disk Footprint:** File PDF tải về từ internet chỉ lưu tạm ở thư mục `tempfile`. Khối lệnh `finally` cam kết xóa bỏ file PDF ngay sau khi đọc xong, không để lại rác trên ổ cứng.
@@ -33,6 +34,7 @@ Herbal-Data/
 ├── README.md             # Hướng dẫn sử dụng & tổng quan dự án
 └── src/                  # Các module chức năng chuyên biệt
     ├── __init__.py       # Package init
+    ├── spider.py         # PDFSpider: Tự động tìm kiếm link PDF theo từ khóa
     ├── ai_manager.py     # GeminiKeyPool: Key rotation & trích xuất JSON
     ├── db_manager.py     # DatabaseManager: MongoDB Lazy Creation & Index
     ├── pdf_processor.py  # PDFProcessor: Tải PDF với fake-UA & đọc text
@@ -151,19 +153,24 @@ GEMINI_KEYS=AIzaSyA_KEY_1,AIzaSyB_KEY_2,AIzaSyC_KEY_3
 
 ### Bước 4: Khởi chạy chương trình
 
-1. **Cào danh sách URL truyền trực tiếp qua dòng lệnh:**
+1. **Chạy mặc định (Automated Discovery - Tự động tìm bài báo theo từ khóa mẫu):**
+   ```bash
+   python main_scraper.py
+   ```
+
+2. **Tìm kiếm tự động với danh sách từ khóa thảo dược tùy chọn:**
+   ```bash
+   python main_scraper.py --keywords "nghiên cứu sâm ngọc linh" "tác dụng xạ đen" --max-results 5
+   ```
+
+3. **Cào danh sách URL truyền trực tiếp qua dòng lệnh (bỏ qua Spider):**
    ```bash
    python main_scraper.py --urls https://domain.com/paper1.pdf https://domain.com/paper2.pdf
    ```
 
-2. **Cào từ file danh sách URL (mỗi dòng chứa một URL PDF):**
+4. **Cào từ file danh sách URL (mỗi dòng chứa một URL PDF):**
    ```bash
    python main_scraper.py --file list_urls.txt
-   ```
-
-3. **Chạy thử nghiệm mặc định (Demo):**
-   ```bash
-   python main_scraper.py
    ```
 
 ---

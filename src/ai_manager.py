@@ -36,13 +36,13 @@ YÊU CẦU BẮT BUỘC:
 class GeminiKeyPool:
     """
     Quản lý luân chuyển danh sách Gemini API Keys (API Key Rotation)
-    và tương tác trích xuất dữ liệu qua model gemini-1.5-flash.
+    và tương tác trích xuất dữ liệu qua model Gemini (mặc định: gemini-2.5-flash).
     """
 
     def __init__(
         self,
         api_keys: Optional[List[str]] = None,
-        model_name: str = "gemini-1.5-flash",
+        model_name: Optional[str] = None,
     ):
         if api_keys:
             self.keys = [k.strip() for k in api_keys if k and k.strip()]
@@ -56,7 +56,7 @@ class GeminiKeyPool:
             )
 
         self.current_index = 0
-        self.model_name = model_name
+        self.model_name = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         self.model = None
         self._init_current_model()
 
