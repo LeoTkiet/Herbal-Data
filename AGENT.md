@@ -1,219 +1,267 @@
 # 🤖 Herbal Data Scraping Agent (Vietnamese Herbs)
 
-## 📌 1. Tổng quan (Overview)
-**Herbal Data Scraping Agent** là một hệ thống bot cào và bóc tách dữ liệu thông minh, hoạt động theo mô hình **100% Local-first**. Hệ thống được thiết kế chuyên biệt để tự động thu thập, trích xuất và chuẩn hóa thông tin y học dược liệu về các loại cây thuốc, thảo dược Việt Nam từ các bài báo, công trình nghiên cứu khoa học (research papers) định dạng PDF.
+## 📌 1. Overview
+**Herbal Data Scraping Agent** is an intelligent crawling and extraction system operating on a **100% Local-first** architecture. The system is designed specifically to discover, collect, extract, and standardize medicinal herbal knowledge regarding Vietnamese medicinal plants and herbs from scientific research papers in PDF format.
 
-- **Mục tiêu:** Xây dựng cơ sở dữ liệu y học cổ truyền & dược liệu học có cấu trúc chuẩn, phục vụ tra cứu và huấn luyện mô hình AI.
-- **Tác giả / Maintainer:** **Huỳnh Tuấn Kiệt (LeoTKiet)**
-- **Môi trường hoạt động:** Local Machine (On-demand execution, tối ưu tài nguyên).
+- **Objective:** Construct a standardized, structured database of traditional medicine and pharmacognosy for query systems and AI model training.
+- **Author / Maintainer:** **Huỳnh Tuấn Kiệt (LeoTKiet)**
+- **Operating Environment:** Local Machine (On-demand execution, resource-optimized).
 
 ---
 
 ## 🛠 2. Tech Stack & Dependencies
-Hệ thống sử dụng kiến trúc module hóa (**Modular Architecture**) với các công nghệ lõi:
+The system utilizes a **Modular Architecture** powered by modern core technologies:
 
-- **Ngôn ngữ:** Python 3.10+
-- **Tìm kiếm & Tự động dò tìm (Automated Discovery):**
-  - `ddgs`: Tự động tìm kiếm link PDF theo từ khóa y học với cú pháp `filetype:pdf`.
-- **Thư viện Web Scraping & Anti-bot:**
-  - `requests`: Tải file PDF theo luồng stream.
-  - `fake-useragent`: Giả lập đa dạng User-Agent của trình duyệt hiện đại.
-- **Xử lý PDF:**
-  - `pdfplumber`: Phân tích và trích xuất nội dung văn bản chất lượng cao từ tài liệu nghiên cứu y khoa.
-- **Trí tuệ nhân tạo (AI Engine):**
-  - `google-generativeai`: Sử dụng model `gemini-2.5-flash` kết hợp System Prompt ép cấu trúc JSON chuẩn.
-- **Cơ sở dữ liệu (Database):**
-  - `pymongo`: Kết nối và thao tác với MongoDB (Local hoặc Cloud Atlas).
-- **Cấu hình:**
-  - `python-dotenv`: Quản lý các biến môi trường an toàn qua file `.env`.
+- **Programming Language:** Python 3.10+
+- **Search & Automated Discovery:**
+  - `ddgs`: Automatically queries for PDF research papers using the query syntax `filetype:pdf`.
+- **Web Scraping & Anti-Bot Bypass:**
+  - `requests`: Stream-based PDF downloading.
+  - `fake-useragent`: Randomized modern browser User-Agent simulation.
+- **PDF Processing:**
+  - `pdfplumber`: High-fidelity text extraction from complex scientific paper layouts.
+- **Artificial Intelligence (AI Engine):**
+  - `google-generativeai`: Uses `gemini-3.6-flash` with structured system instructions enforcing standard JSON output.
+- **Database:**
+  - `pymongo`: Connectivity and indexing operations for MongoDB (Local or Cloud Atlas).
+- **Configuration:**
+  - `python-dotenv`: Secure environment variable management via `.env`.
 
-### 📁 Cấu trúc Thư mục Dự án
+### 📁 Project Directory Structure
 ```text
 Herbal-Data/
-├── .env.example          # File mẫu cấu hình biến môi trường
-├── requirements.txt      # Danh sách thư viện phụ thuộc
-├── main_scraper.py       # File thực thi chính (CLI & Orchestration)
-├── src/                  # Các module chức năng tách biệt
+├── .env.example          # Environment variable template
+├── requirements.txt      # Python dependency list
+├── main_scraper.py       # Main CLI entry point & orchestration
+├── src/                  # Isolated functional modules
 │   ├── __init__.py
 │   ├── spider.py         # Automated Discovery Spider (DuckDuckGo Search)
-│   ├── ai_manager.py     # Gemini Key Pool, bắt lỗi 429 & luân chuyển Key
+│   ├── ai_manager.py     # Gemini Key Pool, 429 error handling & Key rotation
 │   ├── db_manager.py     # MongoDB Lazy Creation, Idempotency & Indexing
-│   ├── pdf_processor.py  # Tải và trích xuất text từ tài liệu PDF
-│   └── pipeline.py       # Điều phối toàn bộ luồng cào dữ liệu
-└── AGENT.md              # Tài liệu đặc tả kiến trúc hệ thống
+│   ├── pdf_processor.py  # PDF downloading and text extraction
+│   └── pipeline.py       # Core scraping and synthesis pipeline
+└── AGENT.md              # System architecture specification
 ```
 
 ---
 
-## 📜 3. Quy tắc Hoạt động (Operational Rules)
-Để đảm bảo an toàn tuyệt đối cho thiết bị local, tránh rò rỉ bộ nhớ, chống nghẽn quota và bảo vệ tài nguyên mạng, Agent tuân thủ 4 quy tắc cốt lõi:
+## 📜 3. Operational Rules
+To ensure safety on local hardware, prevent memory leaks, eliminate quota bottlenecks, and protect network resources, the Agent adheres strictly to 4 core operational rules:
 
-1. **Zero Disk Footprint (Không lưu rác ổ cứng):**
-   - File PDF tải về từ internet chỉ được lưu trữ tại thư mục tạm thời của hệ điều hành (`tempfile`).
-   - Toàn bộ quá trình xử lý nằm trong khối lệnh `try...except...finally`. Khối `finally` **BẮT BUỘC** gọi `os.remove(temp_pdf_path)` để dọn dẹp file PDF ngay lập tức dù quá trình xử lý thành công hay gặp ngoại lệ.
+1. **Zero Disk Footprint:**
+   - PDF files downloaded from the internet are stored exclusively in the operating system's temporary directory (`tempfile`).
+   - The entire download and extraction process is wrapped in a `try...except...finally` construct. The `finally` block **MANDATORILY** executes `os.remove(temp_pdf_path)` to immediately clean up the temporary file regardless of success or failure.
 
-2. **Anti-Bot Bypass & Politeness (Chống khóa IP):**
-   - Header của mỗi request luôn được gán User-Agent ngẫu nhiên từ `fake-useragent`.
-   - Trước mỗi lượt request tải tài liệu mới, hệ thống tự động nghỉ ngơi ngẫu nhiên từ **3 đến 7 giây** (`time.sleep(random.uniform(3, 7))`) nhằm tránh bị các hệ thống tường lửa (Cloudflare, WAF) nhận diện và chặn IP.
+2. **Anti-Bot Bypass & Politeness:**
+   - Headers for every HTTP request are assigned a randomized User-Agent from `fake-useragent`.
+   - Before executing a search or document download, the system pauses for a random interval between **7 and 15 seconds** (`time.sleep(random.uniform(7, 15))`) to avoid triggering Cloudflare, WAF, or search engine rate limits and IP bans.
 
-3. **API Key Rotation (Luân chuyển khóa API tự động):**
-   - Quản lý danh sách nhiều `GEMINI_KEYS` từ file `.env`.
-   - Bắt chính xác mã lỗi `429 (google.api_core.exceptions.ResourceExhausted)`. Khi một key chạm giới hạn quota, Agent tự động luân chuyển (rotate) sang key tiếp theo trong danh sách và thử lại (retry) mà không làm gián đoạn pipeline hay sập chương trình.
+3. **API Key Rotation:**
+   - Manages a pool of multiple `GEMINI_KEYS` loaded from the `.env` file.
+   - Intercepts error `429 (google.api_core.exceptions.ResourceExhausted)`. When a key exhausts its quota, the Agent automatically rotates to the next available key in the pool and retries without crashing or halting the pipeline.
 
-4. **Idempotency & Tracking (Chống cào trùng lặp):**
-   - Trước khi thực hiện cào bất kỳ URL nào, Agent truy vấn trong collection `crawled_logs`. Nếu URL đã có trạng thái `success`, hệ thống sẽ lập tức bỏ qua để tiết kiệm quota LLM và băng thông.
-   - Trạng thái xử lý (`success` hoặc `failed`) cùng thông điệp lỗi chi tiết luôn được cập nhật vào `crawled_logs`.
+4. **Idempotency & Tracking:**
+   - Before downloading or parsing any URL, the Agent queries `crawled_logs`. If the URL has a recorded status of `success`, it is immediately bypassed to save LLM quota and network bandwidth.
+   - Execution status (`success` or `failed`) along with detailed error messages are always updated in `crawled_logs`.
 
----
-
-## 🗄️ 4. Database Autonomy (Quyền tự chủ Cơ sở Dữ liệu)
-Agent vận hành với cơ chế **MongoDB Lazy Creation** hoàn toàn tự động khi khởi chạy (Runtime Initialization):
-
-- **Không cần script khởi tạo thủ công:** Không cần file migration hoặc lệnh `init_db.sql`. Database `herbal_db` và các collections sẽ tự động tạo trên MongoDB ngay khi document đầu tiên được ghi nhận.
-- **Tự động cấu hình 2 Collections:**
-  - `herbs_raw`: Lưu trữ các thông tin dược liệu y khoa đã được cấu trúc hóa.
-  - `crawled_logs`: Lưu vết lịch sử cào của từng URL.
-- **Tự động đánh Index Unique:** Hàm khởi tạo của `DatabaseManager` tự động kích hoạt `create_index("url", unique=True)` trên collection `crawled_logs`, đảm bảo toàn vẹn dữ liệu và tối ưu tốc độ tra cứu URL.
+5. **Graceful Interruption & Transactional Consistency:**
+   - Intercepts `SIGINT` (Ctrl+C). The crawler gracefully completes the herb species currently in flight, ensuring synthesized data is committed to MongoDB and status is cleanly recorded before the process exits.
+   - Prevents inconsistent states or partial row corruption. A second consecutive Ctrl+C forces immediate termination if required.
 
 ---
 
-## 🔄 5. Data Pipeline (Luồng Xử lý Dữ liệu)
-Quy trình xử lý hoàn chỉnh gồm 2 giai đoạn: **Automated Discovery** và **Core Extraction Pipeline**:
+## 🗄️ 4. Database Autonomy
+The Agent operates with a **MongoDB Lazy Creation** mechanism, automatically preparing data layers at runtime:
+
+- **No Manual Initialization Scripts:** No migration scripts or `init_db.sql` files required. The database `herbal_db` and its collections are automatically instantiated in MongoDB as soon as the first document is written.
+- **Three Dedicated Collections:**
+  - `herbs_raw`: Stores extracted medical herbal information (1 herb = 1 unique document, no row duplication).
+  - `crawled_logs`: Tracks crawl history for each URL (Unique Index on `url` for $O(1)$ lookups).
+  - `keyword_logs`: Tracks local and scientific herb names searched (Unique Index on `keyword` for $O(1)$ deduplication).
+- **Automatic Index Creation:**
+  - `crawled_logs`: `create_index("url", unique=True)`
+  - `keyword_logs`: `create_index("keyword", unique=True)` and `create_index("scientific_name")`
+  - `herbs_raw`: `create_index("queried_name")` and `create_index("herb_name.scientific")`
+
+---
+
+## 🔄 5. Data Pipeline (Entity-centric Workflow)
+The complete data workflow comprises 3 autonomous phases:
 
 ```
-[Danh sách Từ khóa Thảo dược]
-              │
-              ▼
-┌───────────────────────────────────────────────┐
-│ GIAI ĐOẠN 1: AUTOMATED DISCOVERY (SPIDER)     │
-│ 1. Ghép cú pháp "filetype:pdf" vào từ khóa    │
-│ 2. DuckDuckGo Search (DDGS)                   │
-│ 3. Lọc link .pdf & Khử trùng lặp (Set)        │
-│ 4. Rate-limit delay (2 - 5s giữa các từ khóa) │
-└───────────────────────┬───────────────────────┘
-                        │ Danh sách Unique PDF URLs
-                        ▼
-┌───────────────────────────────────────────────┐
-│ GIAI ĐOẠN 2: CORE EXTRACTION PIPELINE         │
-│ 5. Check Log (Idempotency trên MongoDB)       │
-│    ├── (Đã cào thành công) ──► Bỏ qua         │
-│    └── (Chưa cào / failed) ──► Đi tiếp        │
-│ 6. Anti-Bot Delay (3 - 7s)                    │
-│ 7. Ingestion: Tải file PDF tạm (tempfile)     │
-│ 8. Processing: Đọc text bằng pdfplumber       │
-│ 9. AI Extraction: Gemini 1.5 Flash (Key Pool) │
-│    └── (Bắt lỗi 429) ──► Luân chuyển Key      │
-│ 10. Storage & Log: Lưu herbs_raw & log status │
-│ 11. Cleanup (finally): Xóa PDF tạm            │
-└───────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 0: MASTER LIST DISCOVERY (HERBNAMESPIDER)             │
+│ 1. BeautifulSoup scrapes plant/herbal directory web pages   │
+│ 2. Extracts Common Name and Latin Scientific Name           │
+│ 3. Deduplicates and automatically appends to JSON master    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 1: ENTITY AUTO-DISCOVERY & O(1) KEYWORD TRACKING      │
+│ Iterate over each entity in 'vietnamese_herbs.json':        │
+│ 4. Perform O(1) check in 'keyword_logs' (both names)        │
+│    ├── (Already searched) ──► Skip                          │
+│    └── (Not in logs yet)  ──► Proceed:                      │
+│ 5. Pass to PDFSpider search: "{herb} nghiên cứu filetype:pdf"│
+│ 6. Record in 'keyword_logs' with status='searched'          │
+│ 7. time.sleep(random.uniform(7, 15)) for rate limit safety  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Herb's PDF URLs list
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 2: HERB-CENTRIC AI SYNTHESIS PIPELINE                 │
+│ 8. Iterate over PDF URLs for this herb:                     │
+│    ├── Check O(1) Idempotency in 'crawled_logs'             │
+│    ├── Download temporary PDF (tempfile) with fake-UA       │
+│    ├── Extract text using pdfplumber                        │
+│    ├── Update status in 'crawled_logs'                      │
+│    └── Cleanup (finally): Delete temp PDF immediately       │
+│ 9. Consolidate text from all research papers for the herb   │
+│ 10. Send unified context to Gemini EXACTLY ONCE             │
+│     └── Auto-catch 429 & Rotate Key (Key Pool)              │
+│ 11. Save/Merge into 'herbs_raw' (No Row Duplicated)         │
+│     └── 1 herb = 1 unique row, stores all source_urls       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🗂 6. JSON Schema (Cấu trúc Cơ sở Dữ liệu)
+## 🗂 6. JSON Schemas (Database Structure)
 
-### 1. Collection `herbs_raw` (Dữ liệu y khoa bóc tách)
+### 1. Collection `herbs_raw` (Extracted Herbal Data - No Row Duplication)
 ```json
 {
   "_id": "650c8f12a3b4c5d6e7f89012",
+  "queried_name": "sâm ngọc linh",
   "herb_name": {
-    "scientific": "Phyllanthus urinaria",
+    "scientific": "Panax vietnamensis",
     "local": [
-      "Diệp hạ châu",
-      "Cây chó đẻ răng cưa"
+      "Sâm Ngọc Linh",
+      "Sâm Việt Nam",
+      "Cây thuốc giấu"
     ]
   },
   "medicinal_properties": [
-    "Kháng viêm",
-    "Hạ men gan",
-    "Lợi tiểu"
+    "Vitality enhancement",
+    "Anti-stress",
+    "Antioxidant"
   ],
   "active_compounds": [
-    "Phyllanthin",
-    "Hypophyllanthin",
-    "Flavonoids"
+    "Majonoside-R2",
+    "Ginsenoside Rb1",
+    "Ginsenoside Rg1"
   ],
   "curable_diseases": [
-    "Viêm gan B",
-    "Sỏi thận",
-    "Mụn nhọt mẩn ngứa"
+    "Physical asthenia",
+    "Fatigue and stress",
+    "Circulatory deficiency"
   ],
-  "source_url": "https://example.com/research/phyllanthus_urinaria.pdf",
-  "crawled_at": 1696123456.789
+  "source_urls": [
+    "https://example.com/research/paper1.pdf",
+    "https://example.com/research/paper2.pdf"
+  ],
+  "created_at": 1696123450.123,
+  "updated_at": 1696123456.789
 }
 ```
 
-### 2. Collection `crawled_logs` (Nhật ký cào & Idempotency)
+### 2. Collection `crawled_logs` (PDF Crawl Log & Idempotency)
 ```json
 {
   "_id": "650c8f12a3b4c5d6e7f89013",
-  "url": "https://example.com/research/phyllanthus_urinaria.pdf",
+  "url": "https://example.com/research/paper1.pdf",
   "status": "success",
   "error_message": null,
   "metadata": {
-    "herb_raw_id": "650c8f12a3b4c5d6e7f89012"
+    "herb": "sâm ngọc linh"
   },
   "created_at": 1696123450.123,
   "updated_at": 1696123456.789
 }
 ```
 
+### 3. Collection `keyword_logs` (Keyword Log & O(1) Deduplication)
+```json
+{
+  "_id": "650c8f12a3b4c5d6e7f89014",
+  "keyword": "sâm ngọc linh",
+  "scientific_name": "Panax vietnamensis",
+  "status": "completed",
+  "metadata": {
+    "found_urls_count": 5,
+    "saved_to_db": true
+  },
+  "searched_at": 1696123455.123,
+  "created_at": 1696123455.123
+}
+```
+*(Status values: `completed`, `interrupted`, `failed`, `processing`)*
+
 ---
 
-## 🚀 7. Hướng dẫn Chạy (Setup & Execution)
+## 🚀 7. Setup & Execution Guide
 
-### Bước 1: Cài đặt môi trường & Thư viện phụ thuộc
-Đảm bảo máy đã cài đặt Python 3.10+, sau đó cài đặt các gói cần thiết:
+### Step 1: Environment & Dependencies
+Ensure Python 3.10+ is installed, then install all dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-### Bước 2: Thiết lập Biến Môi trường
-Tạo file `.env` từ file mẫu `.env.example`:
+### Step 2: Configure Environment Variables
+Create a `.env` file from `.env.example`:
 ```bash
 cp .env.example .env
 ```
-Mở `.env` và điền cấu hình:
+Configure `.env`:
 ```env
 # MongoDB Connection String
 MONGO_URI=mongodb://localhost:27017/
 
-# Danh sách Gemini API Keys (ngăn cách bằng dấu phẩy để hệ thống xoay vòng key khi 429)
-GEMINI_KEYS=AIzaSyA_KEY_MOT,AIzaSyB_KEY_HAI,AIzaSyC_KEY_BA
+# Comma-separated Gemini API Keys (for automatic rotation upon 429)
+GEMINI_KEYS=AIzaSyA_KEY_1,AIzaSyB_KEY_2,AIzaSyC_KEY_3
+
+# Gemini Model (Default: gemini-3.6-flash)
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
-### Bước 3: Khởi chạy Hệ thống
-Hệ thống cung cấp các phương thức chạy linh hoạt:
+### Step 3: Run the Agent
+The system provides flexible execution modes by phase or full pipeline:
 
-1. **Chế độ Automated Discovery (Mặc định - Tự động tìm kiếm theo từ khóa mẫu):**
+1. **Full Workflow (`--phase all` - Default):**
    ```bash
-   python main_scraper.py
+   python main_scraper.py --phase all --phase0-limit 50 --max-results 5 --phase12-limit 10
+   ```
+   *Sequential execution: Phase 0 discovers up to 50 new herbs -> Phase 1 O(1) keyword check & DDGS search -> Phase 2 PDF extraction, Gemini synthesis, and storage in MongoDB (stops after 10 herbs saved).*
+
+2. **Phase 0 Only (`--phase phase0`):**
+   ```bash
+   python main_scraper.py --phase phase0 --phase0-limit 50
    ```
 
-2. **Tìm kiếm tự động với danh sách từ khóa thảo dược tùy chọn:**
+3. **Phase 1 & 2 Workflow (`--phase phase12`):**
    ```bash
-   python main_scraper.py --keywords "nghiên cứu sâm ngọc linh" "tác dụng xạ đen" --max-results 5
+   python main_scraper.py --phase phase12 --max-results 3 --phase12-limit 5
    ```
 
-3. **Chạy với danh sách URL cụ thể qua dòng lệnh (bỏ qua Spider):**
+4. **Direct Mode (Specific PDF URLs, bypassing Spider):**
    ```bash
    python main_scraper.py --urls https://example.com/paper1.pdf https://example.com/paper2.pdf
    ```
 
-4. **Chạy danh sách URL từ file text (mỗi dòng 1 URL):**
-   ```bash
-   python main_scraper.py --file list_papers.txt
-   ```
-
 ---
 
-## 📈 8. Tiến trình Dự án (Project Progress)
-- **Trạng thái hiện tại:** **Hoàn tất tích hợp Automated Discovery Spider (DuckDuckGo Search) tự động dò tìm tài liệu nghiên cứu PDF theo từ khóa thảo dược.**
-- **Hạng mục đã hoàn thành:**
-  - [x] Thiết lập cấu trúc module dự án chuẩn Clean Code (`src/`).
-  - [x] Cơ chế quản lý mảng Gemini API Keys và bắt lỗi 429 ResourceExhausted để tự động xoay vòng Key.
-  - [x] Cơ chế MongoDB Lazy Creation và tự động thiết lập Unique Index cho `crawled_logs.url`.
-  - [x] Module xử lý PDF và Anti-Bot bypass với User-Agent ngẫu nhiên cùng khoảng nghỉ 3-7s.
-  - [x] Cam kết Zero Disk Footprint qua khối lệnh `finally`.
-  - [x] Giao diện CLI và bộ điều phối pipeline trong `main_scraper.py`.
-  - [x] **Module Automated Discovery Spider (`src/spider.py`):** Tự động tìm kiếm link PDF theo từ khóa thảo dược qua DuckDuckGo Search, chống rate limit và lọc link duy nhất bằng `Set`.
+## 📈 8. Project Milestones
+
+- **Current Status:** **Completed Entity-centric Crawler architecture with modular phase execution (`phase0`, `phase12`, `all`).**
+- **Completed Components:**
+  - [x] Clean, modular project structure (`src/`).
+  - [x] Gemini API Key Pool rotation with 429 ResourceExhausted handling.
+  - [x] MongoDB Lazy Creation and automatic Unique Index configuration for `crawled_logs.url` and `keyword_logs.keyword`.
+  - [x] PDF processing and Anti-Bot protection with randomized User-Agents.
+  - [x] Zero Disk Footprint guarantee via `finally` blocks.
+  - [x] **Phase 0 Master List (`src/herb_name_spider.py`):** Automated plant directory scraper with pagination and limit controls (`--phase0-limit`).
+  - [x] **Phase 1 & 2 Entity-centric Pipeline:** $O(1)$ check in `keyword_logs`, DDGS search `"{herb} nghiên cứu filetype:pdf"`, 7-15s delay, PDF extraction, and Gemini 1-call Synthesis in `herbs_raw` (No Row Duplication).
+  - [x] **Modular Phase Execution:** Isolated phase execution via `--phase {all, phase0, phase12}`.
+  - [x] **Graceful Shutdown & Data Safety:** Intercepts Ctrl+C safely, preserves in-flight data, and synchronizes unfinished crawl tasks.
+  - [x] **Gemini 3.6 Flash Upgrade & Extended Key Pool:** Supported high-throughput model with automatic fallback handling across multi-key pool.
