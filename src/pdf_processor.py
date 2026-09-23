@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class PDFProcessor:
     """
-    Chịu trách nhiệm tải file PDF về thư mục tạm và trích xuất text
-    từ các trang tài liệu nghiên cứu dược liệu.
+    Handles downloading PDF documents to temporary directories and
+    extracting text from herbal research papers.
     """
 
     def __init__(self, timeout: int = 30):
@@ -25,7 +25,7 @@ class PDFProcessor:
             self.ua = None
 
     def get_random_headers(self) -> dict:
-        """Sinh HTTP Header với User-Agent ngẫu nhiên nhằm phòng chống Anti-Bot."""
+        """Generate HTTP headers with randomized User-Agent for Anti-Bot protection."""
         user_agent = (
             self.ua.random
             if self.ua
@@ -39,11 +39,11 @@ class PDFProcessor:
 
     def download_pdf(self, url: str, destination_dir: Optional[str] = None) -> str:
         """
-        Tải file PDF từ URL về ổ cứng local (thư mục tạm).
-        Trả về đường dẫn tuyệt đối của file tạm.
+        Download a PDF file from a URL to local disk (temporary directory).
+        Returns the absolute path to the temporary file.
         """
         headers = self.get_random_headers()
-        logger.info(f"Đang tải PDF từ {url}...")
+        logger.info(f"Downloading PDF from {url}...")
 
         target_dir = destination_dir or tempfile.gettempdir()
         temp_file = tempfile.NamedTemporaryFile(
@@ -63,29 +63,29 @@ class PDFProcessor:
                     if chunk:
                         f.write(chunk)
 
-            logger.info(f"Đã tải thành công PDF về file tạm: {temp_path}")
+            logger.info(f"Successfully downloaded PDF to temporary file: {temp_path}")
             return temp_path
 
         except Exception as e:
-            # Nếu xảy ra lỗi trong lúc tải, dọn dẹp file tạm ngay lập tức
+            # If an error occurs during download, clean up temporary file immediately
             if os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
                 except OSError:
                     pass
-            logger.error(f"❌ Lỗi khi tải PDF từ {url}: {e}")
+            logger.error(f"❌ Error downloading PDF from {url}: {e}")
             raise
 
     def extract_text(self, pdf_path: str, max_pages: int = 15) -> str:
         """
-        Trích xuất toàn bộ text từ file PDF bằng pdfplumber.
-        Có giới hạn số trang xử lý để tối ưu thời gian và context của LLM.
+        Extract text from the PDF file using pdfplumber.
+        Limits the number of pages processed to optimize runtime and LLM context size.
         """
         if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"Không tìm thấy file PDF tại: {pdf_path}")
+            raise FileNotFoundError(f"PDF file not found at: {pdf_path}")
 
         extracted_pages = []
-        logger.info(f"Đang đọc nội dung PDF từ {pdf_path}...")
+        logger.info(f"Reading PDF content from {pdf_path}...")
 
         with pdfplumber.open(pdf_path) as pdf:
             total_pages = len(pdf.pages)
@@ -101,16 +101,16 @@ class PDFProcessor:
         cleaned_text = self._clean_text(full_text)
 
         if not cleaned_text:
-            raise ValueError("Không thể trích xuất văn bản hợp lệ từ file PDF!")
+            raise ValueError("Failed to extract valid text from the PDF file!")
 
         logger.info(
-            f"Trích xuất thành công {len(extracted_pages)}/{total_pages} trang ({len(cleaned_text)} ký tự)."
+            f"Successfully extracted {len(extracted_pages)}/{total_pages} pages ({len(cleaned_text)} characters)."
         )
         return cleaned_text
 
     def _clean_text(self, text: str) -> str:
-        """Làm sạch khoảng trắng thừa và ký tự điều khiển."""
-        # Thay thế khoảng trắng và dòng trống liên tiếp
+        """Clean excessive whitespaces and control characters."""
+        # Replace consecutive whitespace and blank lines
         cleaned = re.sub(r"\r\n|\r", "\n", text)
         cleaned = re.sub(r"[ \t]+", " ", cleaned)
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)

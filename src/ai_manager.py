@@ -14,29 +14,30 @@ from google.api_core.exceptions import ResourceExhausted
 logger = logging.getLogger(__name__)
 
 HERB_EXTRACTION_SYSTEM_PROMPT = """
-Bạn là một chuyên gia dược liệu học và y học cổ truyền Việt Nam.
-Nhiệm vụ của bạn là đọc và phân tích văn bản bài báo khoa học y khoa/dược học, sau đó trích xuất thông tin về cây thuốc/dược liệu theo đúng định dạng JSON bên dưới.
+You are an expert in pharmacognosy and Vietnamese traditional herbal medicine.
+Your task is to read and analyze synthesized text from medical and pharmaceutical research papers about a medicinal herb, then cross-reference, synthesize, and extract comprehensive information about that medicinal plant according to the JSON format below.
 
-YÊU CẦU BẮT BUỘC:
-1. Chỉ trả về một JSON object hợp lệ duy nhất, KHÔNG kèm theo lời dẫn hoặc văn bản giải thích.
-2. Cấu trúc JSON bắt buộc phải tuân theo schema:
+MANDATORY REQUIREMENTS:
+1. Return ONLY a single valid JSON object, with NO introductory text or markdown formatting outside the JSON.
+2. Synthesize and consolidate knowledge from ALL provided research documents, completely eliminating duplicate information.
+3. The JSON structure must strictly follow this schema:
 {
   "herb_name": {
-    "scientific": "Tên khoa học tiếng Latinh (nếu không có thì ghi null)",
-    "local": ["Tên gọi địa phương hoặc tên tiếng Việt 1", "Tên 2"]
+    "scientific": "Accurate Latin scientific name",
+    "local": ["Local Vietnamese name 1", "Local name 2 (or null if not available)"]
   },
-  "medicinal_properties": ["Tính chất dược lý 1", "Tính chất dược lý 2"],
-  "active_compounds": ["Hợp chất hóa thực vật / hoạt chất 1", "Hoạt chất 2"],
-  "curable_diseases": ["Bệnh hoặc triệu chứng hỗ trợ điều trị 1", "Bệnh 2"]
+  "medicinal_properties": ["Pharmacological property 1", "Pharmacological property 2"],
+  "active_compounds": ["Phytochemical compound / active constituent 1", "Active constituent 2"],
+  "curable_diseases": ["Disease or symptom supported in treatment 1", "Disease 2"]
 }
-3. Các danh sách (local, medicinal_properties, active_compounds, curable_diseases) phải là mảng string. Nếu bài báo không đề cập mục nào thì để mảng rỗng [].
+4. All list fields (local, medicinal_properties, active_compounds, curable_diseases) must be deduplicated string arrays. If a field is not mentioned in the source documents, return an empty array [].
 """.strip()
 
 
 class GeminiKeyPool:
     """
-    Quản lý luân chuyển danh sách Gemini API Keys (API Key Rotation)
-    và tương tác trích xuất dữ liệu qua model Gemini (mặc định: gemini-2.5-flash).
+    Manages rotation across a pool of Gemini API Keys (API Key Rotation)
+    and handles data extraction via the Gemini model (default: gemini-2.5-flash).
     """
 
     def __init__(
@@ -52,11 +53,11 @@ class GeminiKeyPool:
 
         if not self.keys:
             raise ValueError(
-                "Không tìm thấy Gemini API Key nào. Vui lòng cấu hình biến GEMINI_KEYS trong .env!"
+                "No Gemini API Keys found. Please configure the GEMINI_KEYS variable in your .env file!"
             )
 
         self.current_index = 0
-        self.model_name = model_name or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.model_name = model_name or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
         self.model = None
         self._init_current_model()
 
@@ -65,11 +66,11 @@ class GeminiKeyPool:
         return self.keys[self.current_index]
 
     def _init_current_model(self) -> None:
-        """Khởi tạo hoặc tái cấu hình model với API key hiện tại."""
+        """Initialize or reconfigure the model with the current active API key."""
         key = self.current_key
         masked_key = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "***"
         logger.info(
-            f"Sử dụng Gemini API Key [Index: {self.current_index + 1}/{len(self.keys)}]: {masked_key}"
+            f"Using Gemini API Key [Index: {self.current_index + 1}/{len(self.keys)}]: {masked_key} (Model: {self.model_name})"
         )
 
         genai.configure(api_key=key)
@@ -83,16 +84,16 @@ class GeminiKeyPool:
         )
 
     def rotate_key(self) -> str:
-        """Chuyển sang API key tiếp theo trong pool."""
+        """Rotate to the next API key in the pool."""
         self.current_index = (self.current_index + 1) % len(self.keys)
         logger.warning(
-            f"🔄 Đã kích hoạt luân chuyển Key! Chuyển sang Key index {self.current_index + 1}/{len(self.keys)}."
+            f"🔄 Key rotation triggered! Switched to Key index {self.current_index + 1}/{len(self.keys)}."
         )
         self._init_current_model()
         return self.current_key
 
     def _clean_json_text(self, text: str) -> str:
-        """Loại bỏ markdown code block nếu LLM vô tình trả về."""
+        """Strip markdown code block fences if accidentally returned by LLM."""
         cleaned = text.strip()
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
         cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -100,16 +101,16 @@ class GeminiKeyPool:
 
     def extract_herb_data(self, raw_text: str) -> Dict[str, Any]:
         """
-        Gửi văn bản nghiên cứu tới Gemini để trích xuất dữ liệu.
-        Tự động bắt lỗi ResourceExhausted (429) và luân chuyển key.
+        Send research text to Gemini for structured data extraction.
+        Automatically catches ResourceExhausted (429) and recoverable API errors, rotating keys.
         """
         if not raw_text or not raw_text.strip():
-            raise ValueError("Văn bản đầu vào trống, không thể trích xuất!")
+            raise ValueError("Input text is empty, cannot perform extraction!")
 
         max_attempts = len(self.keys)
         attempts = 0
 
-        prompt = f"Hãy phân tích và trích xuất dữ liệu dược liệu từ bài nghiên cứu sau:\n\n{raw_text}"
+        prompt = f"Analyze and extract herbal medicine data from the following research text:\n\n{raw_text}"
 
         while attempts < max_attempts:
             try:
@@ -122,20 +123,28 @@ class GeminiKeyPool:
             except ResourceExhausted as e:
                 attempts += 1
                 logger.warning(
-                    f"⚠️ Lỗi Quota 429 (ResourceExhausted) tại Key {self.current_index + 1}/{len(self.keys)}: {e}"
+                    f"⚠️ Quota 429 Error (ResourceExhausted) on Key {self.current_index + 1}/{len(self.keys)}: {e}"
                 )
                 if attempts < max_attempts:
                     self.rotate_key()
                 else:
-                    logger.error("❌ Tất cả các API Key trong pool đều đã cạn kiệt Quota!")
+                    logger.error("❌ All API Keys in the pool have exhausted their quota!")
                     raise RuntimeError(
-                        "Tất cả Gemini API Keys đều chạm ngưỡng giới hạn (429 ResourceExhausted)!"
+                        "All Gemini API Keys have reached their quota limit (429 ResourceExhausted)!"
                     ) from e
 
             except json.JSONDecodeError as json_err:
-                logger.error(f"❌ Lỗi giải mã JSON từ phản hồi LLM: {json_err}")
+                logger.error(f"❌ JSON decoding error from LLM response: {json_err}")
                 raise
 
             except Exception as e:
-                logger.error(f"❌ Lỗi không xác định khi gọi Gemini API: {e}")
-                raise
+                attempts += 1
+                logger.warning(
+                    f"⚠️ API error on Key {self.current_index + 1}/{len(self.keys)} ({type(e).__name__}: {e})."
+                )
+                if attempts < max_attempts:
+                    logger.info("Rotating to next API key in pool and retrying...")
+                    self.rotate_key()
+                else:
+                    logger.error(f"❌ All {max_attempts} keys in the pool failed: {e}")
+                    raise
